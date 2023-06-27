@@ -1,0 +1,220 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Parameters:
+  S3DomainName:
+    Type: String
+    Default: 'my-bucket.s3.eu-west-3.amazonaws.com'
+  ALBDns:
+    Type: String
+    Default: 'my-app-env.eu-west-3.elasticbeanstalk.com'
+    
+Resources:
+# ------------------------------------------------------------------------------
+# CLOUD FRONT DISTRIBUTION
+# ------------------------------------------------------------------------------
+  CloudfrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        # ----------------------------------------------------------------------
+        # ORIGINS
+        # ----------------------------------------------------------------------
+        Origins:
+        - DomainName: 
+            Ref: S3DomainName
+          Id: 'S3-APP-NAME'
+          CustomOriginConfig:
+            OriginProtocolPolicy: 'match-viewer'
+        - DomainName:
+            Ref: ALBDns
+          Id: 'ALB-APP-NAME' # Must be unique within the distribution
+          CustomOriginConfig:
+            OriginProtocolPolicy: 'match-viewer'
+            
+        # ----------------------------------------------------------------------
+        # CACHE BEHAVIOURS
+        # ----------------------------------------------------------------------
+        DefaultCacheBehavior:
+          AllowedMethods:
+          - GET
+          - HEAD
+          - OPTIONS 
+          - PUT
+          - POST
+          - PATCH
+          - DELETE
+          Compress: true
+          TargetOriginId: 'ALB-APP-NAME' # refer to Origins/Id
+          ViewerProtocolPolicy: 'redirect-to-https'
+          ForwardedValues:
+            QueryString: true
+            Cookies:
+              Forward: none
+          ViewerProtocolPolicy: allow-all
+          CachePolicyId:
+            Ref: CachePolicy
+        HttpVersion: 'http2and3'
+        Logging:
+          Bucket: 'my-app-logs.s3.amazonaws.com'
+          Prefix: 'staging--'
+        CacheBehaviors:
+        - PathPattern: 'favicon-*'
+          Compress: true
+          TargetOriginId: 'ALB-APP-NAME'
+          ViewerProtocolPolicy: 'redirect-to-https'
+          DefaultTTL: 0
+          CachePolicyId:
+            Ref: CachePolicy
+          ForwardedValues:
+            QueryString: 'true'
+            Cookies:
+              Forward: none
+        - PathPattern: 'apple-touch-icon-*'
+          Compress: true
+          TargetOriginId: 'ALB-APP-NAME'
+          ViewerProtocolPolicy: 'redirect-to-https'
+          DefaultTTL: 0
+          CachePolicyId:
+            Ref: CachePolicy
+          ForwardedValues:
+            QueryString: 'true'
+            Cookies:
+              Forward: none
+        - PathPattern: 'ms-icon-*'
+          Compress: true
+          TargetOriginId: 'ALB-APP-NAME'
+          ViewerProtocolPolicy: 'redirect-to-https'
+          DefaultTTL: 0
+          CachePolicyId:
+            Ref: CachePolicy
+          ForwardedValues:
+            QueryString: 'true'
+            Cookies:
+              Forward: none
+        - PathPattern: 'packs/*'
+          TargetOriginId: 'ALB-APP-NAME'
+          ViewerProtocolPolicy: 'redirect-to-https'
+          DefaultTTL: 0
+          CachePolicyId:
+            Ref: CachePolicy
+          ForwardedValues:
+            QueryString: 'true'
+            Cookies:
+              Forward: none
+        - PathPattern: 'amp/*'
+          Compress: true
+          TargetOriginId: 'ALB-APP-NAME'
+          ViewerProtocolPolicy: 'redirect-to-https'
+          DefaultTTL: 0
+          CachePolicyId:
+            Ref: CachePolicy
+          ForwardedValues:
+            QueryString: 'true'
+            Cookies:
+              Forward: none
+        - PathPattern: 'xxx/*'
+          AllowedMethods:
+          - GET
+          - HEAD
+          - OPTIONS
+          - PUT
+          - POST
+          - PATCH
+          - DELETE
+          TargetOriginId: 'ALB-APP-NAME'
+          ViewerProtocolPolicy: 'redirect-to-https'
+          DefaultTTL: 0
+          CachePolicyId:
+            Ref: CachePolicy
+          ForwardedValues:
+            QueryString: 'true'
+            Cookies:
+              Forward: none
+        - PathPattern: '/*.jpg'
+          Compress: true
+          TargetOriginId: 'S3-APP-NAME'
+          ViewerProtocolPolicy: 'redirect-to-https'
+          DefaultTTL: 0
+          ForwardedValues:
+            QueryString: 'true'
+            Cookies:
+              Forward: none
+        - PathPattern: '/*.png'
+          Compress: true
+          TargetOriginId: 'S3-APP-NAME'
+          ViewerProtocolPolicy: 'redirect-to-https'
+          DefaultTTL: 0
+          ForwardedValues:
+            QueryString: 'true'
+            Cookies:
+              Forward: none
+        - PathPattern: '/*.jpeg'
+          Compress: true
+          TargetOriginId: 'S3-APP-NAME'
+          ViewerProtocolPolicy: 'redirect-to-https'
+          DefaultTTL: 0
+          ForwardedValues:
+            QueryString: 'true'
+            Cookies:
+              Forward: none
+              
+        # ----------------------------------------------------------------------
+        # CNAMES
+        # ----------------------------------------------------------------------
+        Aliases:
+          - 'www.20minutes.tv'
+        
+        # ----------------------------------------------------------------------
+        # CERTIFICATES (in us-east-1)
+        # ----------------------------------------------------------------------
+        ViewerCertificate:
+          AcmCertificateArn: 'arn:aws:acm:us-east-1:[Account-ID]:certificate/[certificate-ID]'
+          SslSupportMethod: sni-only
+        
+        # ----------------------------------------------------------------------
+        # COST
+        # ---------------------------------------------------------------------
+        PriceClass: PriceClass_100 # US/CANADA/EUROPE only
+  
+# ------------------------------------------------------------------------------
+# CACHE POLICY
+# ------------------------------------------------------------------------------
+  CachePolicy:
+    Type: AWS::CloudFront::CachePolicy
+    Properties: 
+      CachePolicyConfig: 
+        DefaultTTL: 600
+        MinTTL: 10
+        MaxTTL: 600
+        Name: MyAppCachePolicy
+        ParametersInCacheKeyAndForwardedToOrigin: 
+            CookiesConfig: 
+              CookieBehavior: none
+            EnableAcceptEncodingBrotli: true
+            EnableAcceptEncodingGzip: true
+            HeadersConfig: 
+              HeaderBehavior: whitelist
+              Headers:
+                - Origin
+                - Authorization
+                - CloudFront-Viewer-Country
+                - CloudFront-Forwarded-Proto
+                - Referer
+                - Host
+            QueryStringsConfig: 
+              QueryStringBehavior: all
+
+# ------------------------------------------------------------------------------
+# OUTPUTS
+# ------------------------------------------------------------------------------
+Outputs:
+  HttpDNS:
+    Value: !Sub 'http://${CloudfrontDistribution.DomainName}'
+  HttpSDNS:
+    Value: !Sub 'https://${CloudfrontDistribution.DomainName}'
+  DistributionDomainName:
+    Value: 
+      !GetAtt CloudfrontDistribution.DomainName
+    Export:
+      Name: "CLOUDFRONT-DISTRIBUTION-DOMAIN-NAME-APP-NAME"
